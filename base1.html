@@ -1,91 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
-  <title>Best Practice Layout</title>
-  <style>
-  /* ===== CSS RESET (important for WebKit) ===== */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html,
-body {
-  height: 100%;
-}
-
-/* ===== ROOT CONTAINER ===== */
-.app {
-  min-height: 100vh;   /* fallback */
-  min-height: 100dvh;  /* modern mobile browsers */
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-}
-
-/* ===== IMAGE SECTION ===== */
-.media {
-  flex: 2;
-}
-
-.media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block; /* removes iOS inline-gap */
-}
-
-/* ===== TEXT SECTION ===== */
-.content {
-  flex: 1;
-  padding: 1.5rem;
-}
-
-/* ===== DESKTOP BEHAVIOR ===== */
-@media (min-width: 1024px) {
-  .app {
-    flex-direction: row;
-    height: 100vh;       /* lock viewport */
-    overflow: hidden;   /* prevent page scroll */
-  }
-
-  .media,
-  .content {
-    height: 100%;
-  }
-
-  .media {
-    flex: 3;
-  }
-
-  .content {
-    flex: 2;
-    overflow: auto;     /* safe fallback if text grows */
-  }
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-Browser CSV Field Analyzer</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1000px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.5; }
+        .card { background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        h1, h3 { margin-top: 0; color: #24292e; }
+        hr { border: 0; border-top: 1px solid #eaecef; margin: 20px 0; }
+        .status { font-weight: bold; color: #007bff; margin-bottom: 15px; }
+        .disabled { opacity: 0.5; pointer-events: none; }
+        .field-tag { display: inline-block; background: #f1f8ff; color: #0366d6; padding: 4px 10px; margin: 4px; border-radius: 4px; font-family: monospace; font-size: 13px; border: 1px solid #c8e1ff; }
+        input[type="text"] { width: 100%; padding: 10px; font-size: 14px; border: 1px solid #ccd1d9; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
+        button { background: #28a745; color: white; border: none; padding: 10px 20px; font-size: 14px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #218838; }
+        .table-container { overflow-x: auto; margin-top: 15px; border: 1px solid #e1e4e8; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        th { background: #f6f8fa; padding: 10px; border-bottom: 2px solid #e1e4e8; font-family: monospace; }
+        td { padding: 10px; border-bottom: 1px solid #eaecef; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .error { color: #d73a49; background: #ffdce0; padding: 10px; border-radius: 4px; margin-top: 10px; display: none; }
+    </style>
 </head>
 <body>
-  <main class="app">
-    <section class="media">
-      <img src="https://www.w3schools.com/w3images/mac.jpg" alt="Hero image" />
-    </section>
 
-    <section class="content">
-      <h1>Title</h1>
-      <p>
-        This text always stays visible on desktop without scrolling.
-        On mobile, it flows naturally under the image.
-      </p>
-    </section>
-  </main>
+    <h1>⚡ Fast In-Browser CSV Analyzer</h1>
+    <p>Powered by DuckDB-Wasm. Processes 10–20MB files locally with zero server uploads.</p>
+
+    <!-- STEP 1: Initialization Status -->
+    <div class="card">
+        <div id="dbStatus" class="status">🔄 Initializing DuckDB WebAssembly Engine...</div>
+    </div>
+
+    <!-- STEP 2: File Upload Section -->
+    <div id="uploadSection" class="card disabled">
+        <h3>1️⃣ Upload Local CSV File</h3>
+        <input type="file" id="csvFileInput" accept=".csv">
+        <div id="errorMessage" class="error"></div>
+    </div>
+
+    <!-- STEP 3: Detected Fields Section -->
+    <div id="fieldsSection" class="card disabled">
+        <h3>📋 Detected Fields (Columns)</h3>
+        <p style="font-size: 13px; color: #586069;">Copy these exact names into the input section below.</p>
+        <div id="fieldsContainer">Upload a file to scan columns...</div>
+    </div>
+
+    <!-- STEP 4: Query and Data Projection Section -->
+    <div id="projectionSection" class="card disabled">
+        <h3>2️⃣ Select Fields to View Data</h3>
+        <div style="margin-bottom: 15px;">
+            <label for="columnInput" style="display:block; font-weight:bold; margin-bottom:5px;">Enter columns (comma-separated):</label>
+            <input type="text" id="columnInput" placeholder="e.g., timestamp, device_id, metrics_a">
+        </div>
+        <button id="queryBtn">View Data</button>
+
+        <hr>
+
+        <h3>📊 Query Result (Previewing Top 100 Rows)</h3>
+        <div class="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr><td style="color:#586069; font-style:italic;">No active data selection. Enter columns and click "View Data".</td></tr>
+                </thead>
+                <tbody id="dataBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Script to tie it together -->
+    <script type="module">
+        import * as duckdb from 'https://jsdelivr.net';
+
+        let db;
+        let conn;
+        let currentFileName = 'uploaded_data.csv';
+
+        // Initialize DuckDB-Wasm automatically on load
+        async function init() {
+            const statusEl = document.getElementById('dbStatus');
+            try {
+                const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+                const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+                
+                const worker_url = URL.createObjectURL(
+                    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+                );
+
+                const worker = new Worker(worker_url);
+                db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                
+                conn = await db.connect();
+                
+                statusEl.innerText = "✅ DuckDB-Wasm Ready. Complete your analysis below.";
+                statusEl.style.color = "#28a745";
+                document.getElementById('uploadSection').classList.remove('disabled');
+            } catch (err) {
+                statusEl.innerText = `❌ Error initializing engine: ${err.message}`;
+                statusEl.style.color = "#d73a49";
+                console.error(err);
+            }
+        }
+
+        // Handle File Input Change
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.style.display = 'none';
+
+            try {
+                // Register File object natively into DuckDB virtual file system
+                // This completely bypasses parsing the file into JavaScript strings!
+                await db.registerFileHandle(currentFileName, file, duckdb.DuckDBDataProtocol.BROWSER_FILE, true);
+
+                // Fetch metadata schemas directly from the CSV structure
+                const schemaResult = await conn.query(`DESCRIBE SELECT * FROM '${currentFileName}'`);
+                const rows = schemaResult.toArray().map(r => r.toJSON());
+                
+                // Extract column names
+                const columns = rows.map(row => row.column_name);
+                
+                // Display found columns as visual UI badges
+                const container = document.getElementById('fieldsContainer');
+                container.innerHTML = columns.map(col => `<span class="field-tag">${col}</span>`).join('');
+                
+                // Set placeholder example for user comfort
+                document.getElementById('columnInput').placeholder = columns.slice(0, 3).join(', ');
+                document.getElementById('columnInput').value = columns.slice(0, 3).join(', ');
+
+                // Unlock lower panels
+                document.getElementById('fieldsSection').classList.remove('disabled');
+                document.getElementById('projectionSection').classList.remove('disabled');
+                
+                // Auto trigger initial load preview
+                executeProjection();
+
+            } catch (err) {
+                errorEl.innerText = `File Processing Error: ${err.message}`;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // Execute Selective Dynamic Column Query 
+        async function executeProjection() {
+            const inputVal = document.getElementById('columnInput').value.trim();
+            const tableHead = document.querySelector('#dataTable thead');
+            const tableBody = document.getElementById('dataBody');
+            
+            if (!inputVal) {
+                alert("Please enter at least one column field name.");
+                return;
+            }
+
+            try {
+                // Sanitize column selections safely into structural SQL fragments
+                // DuckDB cleanly evaluates items matching input strings natively
+                const sqlQuery = `SELECT ${inputVal} FROM '${currentFileName}' LIMIT 100;`;
+                const queryResult = await conn.query(sqlQuery);
+                const dataRows = queryResult.toArray().map(r => r.toJSON());
+
+                if (dataRows.length === 0) {
+                    tableHead.innerHTML = `<tr><th>No records found</th></tr>`;
+                    tableBody.innerHTML = '';
+                    return;
+                }
+
+                // Extract dynamic column list based on resulting dataset properties
+                const activeHeaders = Object.keys(dataRows[0]);
+
+                // Render dynamic structural Table Head
+                tableHead.innerHTML = `<tr>${activeHeaders.map(h => `<th>\${h}</th>`).join('')}</tr>`;
+
+                // Render dynamic structural Table Body
+                tableBody.innerHTML = dataRows.map(row => {
+                    return `<tr>${activeHeaders.map(h => `<td>\${row[h] !== null ? row[h] : '<i style="color:#aaa;">null</i>'}</td>`).join('')}</tr>`;
+                }).join('');
+
+            } catch (err) {
+                alert(`SQL Execution Error: ${err.message}\nMake sure your column names match the detected tags precisely.`);
+            }
+        }
+
+        // Setup Event hooks
+        document.getElementById('csvFileInput').addEventListener('change', handleFileUpload);
+        document.getElementById('queryBtn').addEventListener('click', executeProjection);
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
 </body>
 </html>
