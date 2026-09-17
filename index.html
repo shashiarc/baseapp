@@ -1,19 +1,34 @@
-<input type="file" id="csv-file">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Arquero Global Script Example</title>
+    
+    <!-- 1. Load Arquero as a global library -->
+    <script src="https://cdn.jsdelivr.net/npm/arquero@latest"></script>
+</head>
+<body>
 
-<script type="module">
-    import Papa from 'https://cloudflare.com';
-
-    document.getElementById('csv-file').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        
-        Papa.parse(file, {
-            worker: true,  // Runs in background thread, zero UI lag!
-            header: true,  // Automatically maps first row as column keys
-            dynamicTyping: true, // Auto-converts numbers and booleans
-            complete: function(results) {
-                console.log("Parsed JSON Data Array:", results.data);
-                // Ready to feed straight into Arquero or process via JS!
-            }
+    <script>
+        // 2. The library is automatically attached to the 'aq' window object
+        const dt = aq.table({
+            'category': ['Electronics', 'Clothing', 'Electronics', 'Home'],
+            'sales': [1200, 45, 300, 85],
+            'quantity': [2, 1, 1, 3]
         });
-    });
-</script>
+
+        // 3. Perform your groupings and analysis using 'aq.op'
+        const analysis = dt
+            .groupby('category')
+            .rollup({
+                total_sales: d => aq.op.sum(d.sales),
+                transaction_count: aq.op.count()
+            })
+            .orderby(aq.desc('total_sales'));
+
+        // Print to the browser console
+        analysis.print();
+    </script>
+    
+</body>
+</html>
